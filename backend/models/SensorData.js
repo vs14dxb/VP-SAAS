@@ -1,5 +1,7 @@
+const mongoose = require('mongoose');
+
 const SensorDataSchema = new mongoose.Schema({
-  deviceId: { type: String, required: true },    // <-- ADD THIS LINE!
+  deviceId: { type: String, required: true },   // <<<<<< ADD THIS LINE!
   temperature: Number,
   humidity: Number,
   tvoc: Number,
@@ -11,3 +13,5 @@ const SensorDataSchema = new mongoose.Schema({
   isAlert: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
+
+module.exports = mongoose.model('SensorData', SensorDataSchema);
