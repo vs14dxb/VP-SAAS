@@ -1,13 +1,23 @@
 // backend/orangeFetcher.js
 
 const cron = require('node-cron');
-const fetch = require('node-fetch'); // Make sure node-fetch@2 is installed
+const fetch = require('node-fetch'); // Use node-fetch@2
 const SensorData = require('./models/SensorData');
 
 const ORANGE_API_URL = 'https://liveobjects.orange-business.com/api/v1/data/search';
 const ORANGE_API_KEY = '9e3d1eebdadb42709de8c56f42a16e5e';
 
-// Customize these as needed
+// Map devEUI to deviceId (uppercase)
+const DEV_EUI_TO_DEVICE_ID = {
+  "24e124850f026337": "24E124850F026337", // GS601-1
+  "24e124850f026622": "24E124850F026622"  // GS601-2
+};
+
+const DEVICES = [
+  { name: "GS601-1", id: "24E124850F026337" },
+  { name: "GS601-2", id: "24E124850F026622" },
+];
+
 const ALERT_THRESHOLDS = {
   tvoc: 300,
   pm10: 50,
@@ -22,7 +32,7 @@ function isAlert(data) {
   );
 }
 
-// This function can be triggered by cron or manually via route
+// Main fetch function
 async function fetchAndStoreOrangeData() {
   try {
     const res = await fetch(ORANGE_API_URL, {
@@ -33,22 +43,40 @@ async function fetchAndStoreOrangeData() {
       },
       body: JSON.stringify({
         sort: { timestamp: { order: 'desc' } },
-        size: 3
+        size: 10 // Increase to make sure you get both devices
       })
     });
     const data = await res.json();
 
     const hits = data.hits?.hits || [];
+    const seenDevices = new Set();
+
     for (const h of hits) {
       const value = h._source.value;
       value.timestamp = new Date(h._source.timestamp);
-      // Sometimes Orange data structure varies, ensure deviceId
-      value.deviceId = h._source.deviceId || value.deviceId || h._source.identifier || "unknown";
 
-      // Log for debugging
+      // --- Device ID Fix ---
+      // Try to get deviceId from devEUI mapping if deviceId missing
+      let deviceIdCandidate =
+        h._source.deviceId ||
+        value.deviceId ||
+        h._source.identifier ||
+        h._source.devEUI ||
+        value.devEUI ||
+        "unknown";
+
+      // Map lower-case devEUI/deviceId to your known deviceId
+      const mappedDeviceId = DEV_EUI_TO_DEVICE_ID[deviceIdCandidate.toLowerCase()];
+      value.deviceId = mappedDeviceId || deviceIdCandidate;
+
+      if (DEVICES.some(d => d.id === value.deviceId)) {
+        seenDevices.add(value.deviceId);
+      }
+
+      // Debug log
       console.log('Fetched Orange data:', value);
 
-      // Check for alert
+      // Check for alert and insert
       if (isAlert(value)) {
         await SensorData.create({ ...value, isAlert: true });
         console.log("ALERT: Saved sensor data", value);
@@ -59,6 +87,20 @@ async function fetchAndStoreOrangeData() {
           await SensorData.create({ ...value, isAlert: false });
           console.log("Saved hourly data", value);
         }
+      }
+    }
+
+    // Log missing devices
+    for (const device of DEVICES) {
+      if (!seenDevices.has(device.id)) {
+        console.warn(`Warning: No data from Orange for device ${device.name} (${device.id}) in this fetch.`);
+        // Optionally insert a "missing data" record (commented)
+        // await SensorData.create({
+        //   deviceId: device.id,
+        //   timestamp: new Date(),
+        //   isAlert: false,
+        //   missing: true,
+        // });
       }
     }
   } catch (err) {
