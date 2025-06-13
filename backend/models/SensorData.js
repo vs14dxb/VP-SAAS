@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const SensorDataSchema = new mongoose.Schema({
-  deviceId: { type: String, required: true },   // <<<<<< ADD THIS LINE!
+  deviceId: { type: String, required: true },
   temperature: Number,
   humidity: Number,
   tvoc: Number,

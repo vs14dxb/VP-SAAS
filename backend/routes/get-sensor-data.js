@@ -17,25 +17,4 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/get-sensor-data/test-insert
-router.post('/test-insert', async (req, res) => {
-  try {
-    const doc = await SensorData.create({
-      deviceId: '24E124850F026337',
-      temperature: 25,
-      humidity: 50,
-      tvoc: 100,
-      pm1_0: 2,
-      pm2_5: 5,
-      pm10: 10,
-      vaping_index: 0,
-      timestamp: new Date(),
-      isAlert: false,
-    });
-    res.json({ doc });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 module.exports = router;
